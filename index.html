@@ -13,14 +13,11 @@
       --muted: #6b7280;
       --border: #e5e7eb;
       --blue: #3b82f6;
-      --green: #10b981;
-      --amber: #f59e0b;
-      --red: #ef4444;
       --purple: #8b5cf6;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); }
-    .container { max-width: 1280px; margin: 0 auto; padding: 24px; }
+    .container { max-width: 1100px; margin: 0 auto; padding: 24px; }
     header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
     header h1 { font-size: 24px; font-weight: 700; }
     .updated { color: var(--muted); font-size: 13px; }
@@ -30,30 +27,18 @@
     .card .value { font-size: 32px; font-weight: 700; }
     .card.payg .value { color: var(--blue); }
     .card.packages .value { color: var(--purple); }
-    .card.total .value { color: var(--text); }
     .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
     .chart-card { background: var(--card); border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
     .chart-card h2 { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
-    .chart-wrap { position: relative; height: 300px; }
-    .filter-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
-    .filter-btn { padding: 6px 16px; border-radius: 20px; border: 1px solid var(--border); background: var(--card); cursor: pointer; font-size: 13px; transition: all .2s; }
-    .filter-btn.active { background: var(--blue); color: #fff; border-color: var(--blue); }
-    .filter-btn:hover { border-color: var(--blue); }
-    table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    th { background: var(--bg); text-align: left; padding: 10px 12px; font-weight: 600; position: sticky; top: 0; }
-    td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+    .chart-wrap { position: relative; height: 320px; }
+    .summary-table { background: var(--card); border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    .summary-table h2 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th { background: var(--bg); text-align: left; padding: 10px 16px; font-weight: 600; }
+    td { padding: 10px 16px; border-bottom: 1px solid var(--border); }
     tr:hover td { background: #f0f4ff; }
-    .table-card { background: var(--card); border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow-x: auto; }
-    .table-card h2 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
-    .badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; }
-    .badge-payg { background: #dbeafe; color: #1d4ed8; }
-    .badge-pkg { background: #ede9fe; color: #6d28d9; }
-    .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
-    .search-box { padding: 8px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; width: 260px; }
-    @media (max-width: 768px) {
-      .charts { grid-template-columns: 1fr; }
-      .search-box { width: 100%; }
-    }
+    .text-right { text-align: right; }
+    @media (max-width: 768px) { .charts { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -76,31 +61,19 @@
       </div>
     </div>
 
-    <div class="table-card">
-      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:12px;">
-        <h2 style="margin:0;">Документы</h2>
-        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-          <input type="text" class="search-box" id="search" placeholder="Поиск по ИНН, организации...">
-        </div>
-      </div>
-      <div class="filter-bar" id="filters"></div>
-      <div style="max-height:500px; overflow-y:auto;">
-        <table>
-          <thead>
-            <tr>
-              <th>Тип</th>
-              <th>ИНН</th>
-              <th>Организация</th>
-              <th>Номер документа</th>
-              <th>Статус</th>
-              <th>Дата доставки</th>
-              <th>Дата изменения статуса</th>
-              <th>ИдУчастЭДО</th>
-            </tr>
-          </thead>
-          <tbody id="tbody"></tbody>
-        </table>
-      </div>
+    <div class="summary-table">
+      <h2>Сводная таблица</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Статус</th>
+            <th class="text-right">PAYG</th>
+            <th class="text-right">Пакеты</th>
+            <th class="text-right">Итого</th>
+          </tr>
+        </thead>
+        <tbody id="summaryBody"></tbody>
+      </table>
     </div>
   </div>
 
@@ -111,134 +84,74 @@
       'Требуется подписать и отправить': '#ef4444',
       'Подписан': '#10b981',
     };
-    const FALLBACK_COLORS = ['#6366f1','#ec4899','#14b8a6','#f97316','#64748b'];
-
-    function getColor(status, idx) {
-      return STATUS_COLORS[status] || FALLBACK_COLORS[idx % FALLBACK_COLORS.length];
-    }
-
-    let DATA = null;
-    let activeFilter = 'Все';
+    const FALLBACK = ['#6366f1','#ec4899','#14b8a6','#f97316','#64748b'];
+    function getColor(s, i) { return STATUS_COLORS[s] || FALLBACK[i % FALLBACK.length]; }
 
     async function load() {
       const resp = await fetch('data/dashboard.json');
-      DATA = await resp.json();
-      render();
-    }
+      const D = await resp.json();
 
-    function render() {
-      document.getElementById('updated').textContent = `Обновлено: ${DATA.updated}`;
+      document.getElementById('updated').textContent = 'Обновлено: ' + D.updated;
 
       // Cards
-      const cardsEl = document.getElementById('cards');
-      cardsEl.innerHTML = `
-        <div class="card total"><div class="label">Всего документов</div><div class="value">${DATA.total}</div></div>
-        <div class="card payg"><div class="label">PAYG</div><div class="value">${DATA.types['PAYG'] || 0}</div></div>
-        <div class="card packages"><div class="label">Пакеты</div><div class="value">${DATA.types['Пакеты'] || 0}</div></div>
-      `;
-      // Add status cards
-      for (const [status, count] of Object.entries(DATA.statuses)) {
-        const short = status.length > 30 ? status.slice(0, 30) + '…' : status;
-        cardsEl.innerHTML += `<div class="card"><div class="label">${short}</div><div class="value">${count}</div></div>`;
+      const c = document.getElementById('cards');
+      c.innerHTML =
+        `<div class="card total"><div class="label">Всего документов</div><div class="value">${D.total}</div></div>` +
+        `<div class="card payg"><div class="label">PAYG</div><div class="value">${D.types['PAYG']||0}</div></div>` +
+        `<div class="card packages"><div class="label">Пакеты</div><div class="value">${D.types['Пакеты']||0}</div></div>`;
+      for (const [st, cnt] of Object.entries(D.statuses)) {
+        const short = st.length > 35 ? st.slice(0,35)+'…' : st;
+        c.innerHTML += `<div class="card"><div class="label">${short}</div><div class="value">${cnt}</div></div>`;
       }
 
-      renderCharts();
-      renderFilters();
-      renderTable();
-    }
-
-    function renderCharts() {
-      // Pie chart
-      const pieCtx = document.getElementById('pieChart').getContext('2d');
-      const statLabels = Object.keys(DATA.statuses);
-      const statValues = Object.values(DATA.statuses);
-      const statColors = statLabels.map((s, i) => getColor(s, i));
-
-      new Chart(pieCtx, {
+      // Pie
+      const labels = Object.keys(D.statuses);
+      const values = Object.values(D.statuses);
+      new Chart(document.getElementById('pieChart'), {
         type: 'doughnut',
-        data: { labels: statLabels, datasets: [{ data: statValues, backgroundColor: statColors, borderWidth: 2, borderColor: '#fff' }] },
-        options: {
-          responsive: true, maintainAspectRatio: false,
-          plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 12, font: { size: 12 } } } }
-        }
+        data: { labels, datasets: [{ data: values, backgroundColor: labels.map((s,i)=>getColor(s,i)), borderWidth: 2, borderColor: '#fff' }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 12, font: { size: 12 } } } } }
       });
 
-      // Bar chart
-      const barCtx = document.getElementById('barChart').getContext('2d');
-      const crossLabels = DATA.cross.map(c => {
-        const s = c.status;
-        return s.length > 25 ? s.slice(0, 25) + '…' : s;
-      });
-      new Chart(barCtx, {
+      // Bar
+      function wrapLabel(str, maxWidth) {
+        const words = str.split(' ');
+        const lines = [];
+        let line = '';
+        for (const w of words) {
+          if ((line + ' ' + w).trim().length > maxWidth && line) {
+            lines.push(line.trim());
+            line = w;
+          } else {
+            line = (line + ' ' + w).trim();
+          }
+        }
+        if (line) lines.push(line.trim());
+        return lines;
+      }
+      const crossLabels = D.cross.map(r => wrapLabel(r.status, 22));
+      new Chart(document.getElementById('barChart'), {
         type: 'bar',
         data: {
           labels: crossLabels,
           datasets: [
-            { label: 'PAYG', data: DATA.cross.map(c => c['PAYG'] || 0), backgroundColor: '#3b82f6', borderRadius: 4 },
-            { label: 'Пакеты', data: DATA.cross.map(c => c['Пакеты'] || 0), backgroundColor: '#8b5cf6', borderRadius: 4 },
+            { label: 'PAYG', data: D.cross.map(r=>r['PAYG']||0), backgroundColor: '#3b82f6', borderRadius: 4 },
+            { label: 'Пакеты', data: D.cross.map(r=>r['Пакеты']||0), backgroundColor: '#8b5cf6', borderRadius: 4 },
           ]
         },
-        options: {
-          responsive: true, maintainAspectRatio: false,
-          plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 12, font: { size: 12 } } } },
-          scales: {
-            x: { ticks: { font: { size: 11 }, maxRotation: 20 } },
-            y: { beginAtZero: true, ticks: { stepSize: 1 } }
-          }
-        }
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 12, font: { size: 12 } } } }, scales: { x: { ticks: { font: { size: 11 }, maxRotation: 0, autoSkip: false } }, y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
       });
-    }
 
-    function renderFilters() {
-      const filtersEl = document.getElementById('filters');
-      const allFilters = ['Все', 'PAYG', 'Пакеты'];
-      filtersEl.innerHTML = allFilters.map(f =>
-        `<button class="filter-btn ${f === activeFilter ? 'active' : ''}" onclick="setFilter('${f}')">${f}</button>`
-      ).join('');
-    }
-
-    function setFilter(f) {
-      activeFilter = f;
-      renderFilters();
-      renderTable();
-    }
-
-    function renderTable() {
-      const tbody = document.getElementById('tbody');
-      const query = document.getElementById('search').value.toLowerCase();
-      let rows = DATA.rows;
-
-      if (activeFilter !== 'Все') {
-        rows = rows.filter(r => r.type === activeFilter);
-      }
-      if (query) {
-        rows = rows.filter(r =>
-          r.inn.toLowerCase().includes(query) ||
-          r.org.toLowerCase().includes(query) ||
-          r.doc_num.toLowerCase().includes(query) ||
-          r.status.toLowerCase().includes(query)
-        );
-      }
-
-      tbody.innerHTML = rows.map(r => {
-        const badge = r.type === 'PAYG'
-          ? '<span class="badge badge-payg">PAYG</span>'
-          : '<span class="badge badge-pkg">Пакеты</span>';
-        const dotColor = getColor(r.status, 0);
-        return `<tr>
-          <td>${badge}</td>
-          <td>${r.inn}</td>
-          <td>${r.org}</td>
-          <td>${r.doc_num}</td>
-          <td><span class="status-dot" style="background:${dotColor}"></span>${r.status}</td>
-          <td>${r.date_delivery}</td>
-          <td>${r.date_status}</td>
-          <td style="font-size:11px;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.id_edo}">${r.id_edo}</td>
-        </tr>`;
+      // Summary table
+      const body = document.getElementById('summaryBody');
+      let totalP=0, totalK=0;
+      body.innerHTML = D.cross.map(r => {
+        const p = r['PAYG']||0, k = r['Пакеты']||0;
+        totalP += p; totalK += k;
+        return `<tr><td>${r.status}</td><td class="text-right">${p}</td><td class="text-right">${k}</td><td class="text-right"><strong>${p+k}</strong></td></tr>`;
       }).join('');
+      body.innerHTML += `<tr style="font-weight:700;background:var(--bg);"><td>Итого</td><td class="text-right">${totalP}</td><td class="text-right">${totalK}</td><td class="text-right">${totalP+totalK}</td></tr>`;
     }
-
-    document.getElementById('search').addEventListener('input', renderTable);
     load();
   </script>
 </body>

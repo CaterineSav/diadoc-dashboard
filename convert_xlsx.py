@@ -35,38 +35,24 @@ def main():
     status_by_type = {}
     rows_data = []
 
+    total = 0
     for row in range(2, ws.max_row + 1):
-        inn = clean(ws.cell(row=row, column=1).value)
         org = clean(ws.cell(row=row, column=3).value)
         doc_num = clean(ws.cell(row=row, column=5).value)
         status = clean(ws.cell(row=row, column=14).value)
-        date_delivery = ws.cell(row=row, column=13).value
-        date_status = ws.cell(row=row, column=16).value
-        id_edo = clean(ws.cell(row=row, column=22).value)
 
         if not org:
             continue
 
+        total += 1
         dtype = doc_type(doc_num)
 
-        # Счётчики
         statuses[status] = statuses.get(status, 0) + 1
         if dtype in types:
             types[dtype] = types.get(dtype, 0) + 1
 
         key = f"{dtype}|{status}"
         status_by_type[key] = status_by_type.get(key, 0) + 1
-
-        rows_data.append({
-            "inn": inn,
-            "org": org,
-            "doc_num": doc_num,
-            "status": status,
-            "type": dtype,
-            "date_delivery": date_delivery.strftime("%d.%m.%Y %H:%M") if isinstance(date_delivery, datetime) else clean(date_delivery),
-            "date_status": date_status.strftime("%d.%m.%Y %H:%M") if isinstance(date_status, datetime) else clean(date_status),
-            "id_edo": id_edo,
-        })
 
     # Для cross-table: статус × тип
     all_statuses = sorted(statuses.keys())
@@ -80,18 +66,17 @@ def main():
 
     result = {
         "updated": datetime.now().strftime("%d.%m.%Y %H:%M"),
-        "total": len(rows_data),
+        "total": total,
         "statuses": statuses,
         "types": types,
         "cross": cross,
-        "rows": rows_data,
     }
 
     os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
     with open(OUT_PATH, "w", encoding="utf-8") as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
 
-    print(f"OK: {len(rows_data)} строк → {OUT_PATH}")
+    print(f"OK: {total} строк → {OUT_PATH}")
 
 
 if __name__ == "__main__":
