@@ -43,7 +43,7 @@ def load_dzo_inns():
 
 
 def main():
-    wb = load_workbook(XLSX_PATH, data_only=True)
+    wb = load_workbook(XLSX_PATH)
     ws = wb.active
     dzo_inns = load_dzo_inns()
 
