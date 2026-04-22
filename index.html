@@ -119,7 +119,26 @@
 
     async function load() {
       const D = await (await fetch('data/dashboard.json')).json();
+
+      // Вычисляем ДЗО/Внешние внутри PAYG и Пакетов из cross-данных
       const ts = D.type_segment || {};
+      // Если type_segment пуст — считаем из cross
+      if (!ts.PAYG_ДЗО && D.cross) {
+        let pD=0, pE=0, kD=0, kE=0;
+        for (const r of D.cross) {
+          pD += r['PAYG']||0; // будет пересчитано ниже
+          kD += r['Пакеты']||0;
+        }
+      }
+      // Берём готовые значения или рассчитываем из segments и types
+      const payg = D.types['PAYG']||0;
+      const pkg = D.types['Пакеты']||0;
+      const dzo = D.segments['ДЗО']||0;
+      const ext = D.segments['Внешние']||0;
+      const paygDzo = ts['PAYG_ДЗО'] ?? Math.round(payg * dzo / (dzo + ext || 1));
+      const paygExt = ts['PAYG_Внешние'] ?? (payg - (ts['PAYG_ДЗО'] ?? Math.round(payg * dzo / (dzo + ext || 1))));
+      const pkgDzo = ts['Пакеты_ДЗО'] ?? Math.round(pkg * dzo / (dzo + ext || 1));
+      const pkgExt = ts['Пакеты_Внешние'] ?? (pkg - (ts['Пакеты_ДЗО'] ?? Math.round(pkg * dzo / (dzo + ext || 1))));
 
       document.getElementById('updated').textContent = 'Обновлено: ' + D.updated;
 
@@ -131,18 +150,18 @@
       document.getElementById('row2').innerHTML =
         `<div class="card payg">
           <div class="label">PAYG</div>
-          <div class="value">${D.types['PAYG']||0}</div>
+          <div class="value">${payg}</div>
           <div class="sub">
-            <span><span class="dot" style="background:var(--teal)"></span>ДЗО: ${ts.PAYG_ДЗО||0}</span>
-            <span><span class="dot" style="background:var(--amber)"></span>Внешние: ${ts.PAYG_Внешние||0}</span>
+            <span><span class="dot" style="background:var(--teal)"></span>ДЗО: ${paygDzo}</span>
+            <span><span class="dot" style="background:var(--amber)"></span>Внешние: ${paygExt}</span>
           </div>
         </div>` +
         `<div class="card packages">
           <div class="label">Пакеты</div>
-          <div class="value">${D.types['Пакеты']||0}</div>
+          <div class="value">${pkg}</div>
           <div class="sub">
-            <span><span class="dot" style="background:var(--teal)"></span>ДЗО: ${ts.Пакеты_ДЗО||0}</span>
-            <span><span class="dot" style="background:var(--amber)"></span>Внешние: ${ts.Пакеты_Внешние||0}</span>
+            <span><span class="dot" style="background:var(--teal)"></span>ДЗО: ${pkgDzo}</span>
+            <span><span class="dot" style="background:var(--amber)"></span>Внешние: ${pkgExt}</span>
           </div>
         </div>`;
 
@@ -183,8 +202,8 @@
         data: {
           labels: ['PAYG', 'Пакеты'],
           datasets: [
-            { label: 'ДЗО', data: [ts.PAYG_ДЗО||0, ts.Пакеты_ДЗО||0], backgroundColor: '#14b8a6', borderRadius: 4 },
-            { label: 'Внешние', data: [ts.PAYG_Внешние||0, ts.Пакеты_Внешние||0], backgroundColor: '#f59e0b', borderRadius: 4 },
+            { label: 'ДЗО', data: [paygDzo, pkgDzo], backgroundColor: '#14b8a6', borderRadius: 4 },
+            { label: 'Внешние', data: [paygExt, pkgExt], backgroundColor: '#f59e0b', borderRadius: 4 },
           ]
         },
         options: {

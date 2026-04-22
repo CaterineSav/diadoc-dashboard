@@ -2,9 +2,8 @@ name: Update Dashboard
 
 on:
   push:
-    paths:
-      - 'Diadoc_status.xlsx'
-  workflow_dispatch:  # ручной запуск
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
