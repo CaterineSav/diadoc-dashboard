@@ -7,13 +7,9 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <style>
     :root {
-      --bg: #f5f7fa;
-      --card: #ffffff;
-      --text: #1a1a2e;
-      --muted: #6b7280;
-      --border: #e5e7eb;
-      --blue: #3b82f6;
-      --purple: #8b5cf6;
+      --bg: #f5f7fa; --card: #ffffff; --text: #1a1a2e; --muted: #6b7280;
+      --border: #e5e7eb; --blue: #3b82f6; --purple: #8b5cf6;
+      --green: #10b981; --amber: #f59e0b; --red: #ef4444; --teal: #14b8a6;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); }
@@ -21,16 +17,26 @@
     header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
     header h1 { font-size: 24px; font-weight: 700; }
     .updated { color: var(--muted); font-size: 13px; }
-    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+
+    .row { display: grid; gap: 16px; margin-bottom: 16px; }
+    .row-1 { grid-template-columns: 1fr; }
+    .row-2 { grid-template-columns: 1fr 1fr; }
+    .row-auto { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+
     .card { background: var(--card); border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
     .card .label { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
     .card .value { font-size: 32px; font-weight: 700; }
+    .card.total .value { color: var(--text); }
     .card.payg .value { color: var(--blue); }
     .card.packages .value { color: var(--purple); }
+    .card.dzo .value { color: var(--teal); }
+    .card.ext .value { color: var(--amber); }
+
     .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
     .chart-card { background: var(--card); border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
     .chart-card h2 { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
     .chart-wrap { position: relative; height: 320px; }
+
     .summary-table { background: var(--card); border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
     .summary-table h2 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
     table { width: 100%; border-collapse: collapse; font-size: 14px; }
@@ -38,7 +44,7 @@
     td { padding: 10px 16px; border-bottom: 1px solid var(--border); }
     tr:hover td { background: #f0f4ff; }
     .text-right { text-align: right; }
-    @media (max-width: 768px) { .charts { grid-template-columns: 1fr; } }
+    @media (max-width: 768px) { .charts { grid-template-columns: 1fr; } .row-2 { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -48,7 +54,14 @@
       <span class="updated" id="updated"></span>
     </header>
 
-    <div class="cards" id="cards"></div>
+    <!-- Строка 1: Всего -->
+    <div class="row row-1" id="row1"></div>
+    <!-- Строка 2: PAYG / Пакеты -->
+    <div class="row row-2" id="row2"></div>
+    <!-- Строка 3: ДЗО / Внешние -->
+    <div class="row row-2" id="row3"></div>
+    <!-- Строка 4: Статусы -->
+    <div class="row row-auto" id="row4"></div>
 
     <div class="charts">
       <div class="chart-card">
@@ -69,6 +82,8 @@
             <th>Статус</th>
             <th class="text-right">PAYG</th>
             <th class="text-right">Пакеты</th>
+            <th class="text-right">ДЗО</th>
+            <th class="text-right">Внешние</th>
             <th class="text-right">Итого</th>
           </tr>
         </thead>
@@ -80,28 +95,47 @@
   <script>
     const STATUS_COLORS = {
       'Ожидается промежуточная подпись': '#f59e0b',
-      'Требуется подписать и отправить. На подписании': '#3b82f6',
-      'Требуется подписать и отправить': '#ef4444',
+      'Требуется подписать и отправить': '#3b82f6',
       'Подписан': '#10b981',
     };
     const FALLBACK = ['#6366f1','#ec4899','#14b8a6','#f97316','#64748b'];
     function getColor(s, i) { return STATUS_COLORS[s] || FALLBACK[i % FALLBACK.length]; }
 
+    function wrapLabel(str, maxWidth) {
+      const words = str.split(' ');
+      const lines = []; let line = '';
+      for (const w of words) {
+        if ((line + ' ' + w).trim().length > maxWidth && line) { lines.push(line.trim()); line = w; }
+        else { line = (line + ' ' + w).trim(); }
+      }
+      if (line) lines.push(line.trim());
+      return lines;
+    }
+
     async function load() {
-      const resp = await fetch('data/dashboard.json');
-      const D = await resp.json();
+      const D = await (await fetch('data/dashboard.json')).json();
 
       document.getElementById('updated').textContent = 'Обновлено: ' + D.updated;
 
-      // Cards
-      const c = document.getElementById('cards');
-      c.innerHTML =
-        `<div class="card total"><div class="label">Всего документов</div><div class="value">${D.total}</div></div>` +
+      // Row 1: Total
+      document.getElementById('row1').innerHTML =
+        `<div class="card total"><div class="label">Всего документов</div><div class="value">${D.total}</div></div>`;
+
+      // Row 2: PAYG / Packages
+      document.getElementById('row2').innerHTML =
         `<div class="card payg"><div class="label">PAYG</div><div class="value">${D.types['PAYG']||0}</div></div>` +
         `<div class="card packages"><div class="label">Пакеты</div><div class="value">${D.types['Пакеты']||0}</div></div>`;
+
+      // Row 3: DZO / External
+      document.getElementById('row3').innerHTML =
+        `<div class="card dzo"><div class="label">ДЗО</div><div class="value">${D.segments['ДЗО']||0}</div></div>` +
+        `<div class="card ext"><div class="label">Внешние</div><div class="value">${D.segments['Внешние']||0}</div></div>`;
+
+      // Row 4: Statuses
+      const r4 = document.getElementById('row4');
+      r4.innerHTML = '';
       for (const [st, cnt] of Object.entries(D.statuses)) {
-        const short = st.length > 35 ? st.slice(0,35)+'…' : st;
-        c.innerHTML += `<div class="card"><div class="label">${short}</div><div class="value">${cnt}</div></div>`;
+        r4.innerHTML += `<div class="card"><div class="label">${st}</div><div class="value">${cnt}</div></div>`;
       }
 
       // Pie
@@ -114,21 +148,6 @@
       });
 
       // Bar
-      function wrapLabel(str, maxWidth) {
-        const words = str.split(' ');
-        const lines = [];
-        let line = '';
-        for (const w of words) {
-          if ((line + ' ' + w).trim().length > maxWidth && line) {
-            lines.push(line.trim());
-            line = w;
-          } else {
-            line = (line + ' ' + w).trim();
-          }
-        }
-        if (line) lines.push(line.trim());
-        return lines;
-      }
       const crossLabels = D.cross.map(r => wrapLabel(r.status, 22));
       new Chart(document.getElementById('barChart'), {
         type: 'bar',
@@ -144,13 +163,13 @@
 
       // Summary table
       const body = document.getElementById('summaryBody');
-      let totalP=0, totalK=0;
+      let tP=0, tK=0, tD=0, tE=0;
       body.innerHTML = D.cross.map(r => {
-        const p = r['PAYG']||0, k = r['Пакеты']||0;
-        totalP += p; totalK += k;
-        return `<tr><td>${r.status}</td><td class="text-right">${p}</td><td class="text-right">${k}</td><td class="text-right"><strong>${p+k}</strong></td></tr>`;
+        const p=r['PAYG']||0, k=r['Пакеты']||0, d=r['ДЗО']||0, e=r['Внешние']||0;
+        tP+=p; tK+=k; tD+=d; tE+=e;
+        return `<tr><td>${r.status}</td><td class="text-right">${p}</td><td class="text-right">${k}</td><td class="text-right">${d}</td><td class="text-right">${e}</td><td class="text-right"><strong>${p+k}</strong></td></tr>`;
       }).join('');
-      body.innerHTML += `<tr style="font-weight:700;background:var(--bg);"><td>Итого</td><td class="text-right">${totalP}</td><td class="text-right">${totalK}</td><td class="text-right">${totalP+totalK}</td></tr>`;
+      body.innerHTML += `<tr style="font-weight:700;background:var(--bg);"><td>Итого</td><td class="text-right">${tP}</td><td class="text-right">${tK}</td><td class="text-right">${tD}</td><td class="text-right">${tE}</td><td class="text-right">${tP+tK}</td></tr>`;
     }
     load();
   </script>

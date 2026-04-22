@@ -6,7 +6,12 @@ from openpyxl import load_workbook
 from datetime import datetime
 
 XLSX_PATH = os.path.join(os.path.dirname(__file__), "Diadoc_status.xlsx")
+DZO_PATH = os.path.join(os.path.dirname(__file__), "dzo_inn.json")
 OUT_PATH = os.path.join(os.path.dirname(__file__), "data", "dashboard.json")
+
+STATUS_MAP = {
+    "Требуется подписать и отправить. На подписании": "Требуется подписать и отправить",
+}
 
 
 def clean(val):
@@ -26,49 +31,71 @@ def doc_type(doc_num):
     return "Другое"
 
 
+def normalize_status(status):
+    return STATUS_MAP.get(status, status)
+
+
+def load_dzo_inns():
+    if os.path.exists(DZO_PATH):
+        with open(DZO_PATH, "r", encoding="utf-8") as f:
+            return set(json.load(f))
+    return set()
+
+
 def main():
     wb = load_workbook(XLSX_PATH, data_only=True)
     ws = wb.active
+    dzo_inns = load_dzo_inns()
 
     statuses = {}
     types = {"PAYG": 0, "Пакеты": 0}
+    segments = {"ДЗО": 0, "Внешние": 0}
     status_by_type = {}
-    rows_data = []
-
+    status_by_segment = {}
     total = 0
+
     for row in range(2, ws.max_row + 1):
+        inn = clean(ws.cell(row=row, column=1).value)
         org = clean(ws.cell(row=row, column=3).value)
         doc_num = clean(ws.cell(row=row, column=5).value)
-        status = clean(ws.cell(row=row, column=14).value)
+        raw_status = clean(ws.cell(row=row, column=14).value)
 
         if not org:
             continue
 
         total += 1
+        status = normalize_status(raw_status)
         dtype = doc_type(doc_num)
+        segment = "ДЗО" if inn in dzo_inns else "Внешние"
 
         statuses[status] = statuses.get(status, 0) + 1
         if dtype in types:
             types[dtype] = types.get(dtype, 0) + 1
+        segments[segment] = segments.get(segment, 0) + 1
 
-        key = f"{dtype}|{status}"
-        status_by_type[key] = status_by_type.get(key, 0) + 1
+        key_t = f"{dtype}|{status}"
+        status_by_type[key_t] = status_by_type.get(key_t, 0) + 1
 
-    # Для cross-table: статус × тип
+        key_s = f"{segment}|{status}"
+        status_by_segment[key_s] = status_by_segment.get(key_s, 0) + 1
+
     all_statuses = sorted(statuses.keys())
-    all_types = sorted(types.keys())
     cross = []
     for s in all_statuses:
-        row = {"status": s}
-        for t in all_types:
-            row[t] = status_by_type.get(f"{t}|{s}", 0)
-        cross.append(row)
+        cross.append({
+            "status": s,
+            "PAYG": status_by_type.get(f"PAYG|{s}", 0),
+            "Пакеты": status_by_type.get(f"Пакеты|{s}", 0),
+            "ДЗО": status_by_segment.get(f"ДЗО|{s}", 0),
+            "Внешние": status_by_segment.get(f"Внешние|{s}", 0),
+        })
 
     result = {
         "updated": datetime.now().strftime("%d.%m.%Y %H:%M"),
         "total": total,
         "statuses": statuses,
         "types": types,
+        "segments": segments,
         "cross": cross,
     }
 
