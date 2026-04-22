@@ -50,6 +50,7 @@ def main():
     statuses = {}
     types = {"PAYG": 0, "Пакеты": 0}
     segments = {"ДЗО": 0, "Внешние": 0}
+    type_segment = {"PAYG|ДЗО": 0, "PAYG|Внешние": 0, "Пакеты|ДЗО": 0, "Пакеты|Внешние": 0}
     status_by_type = {}
     status_by_segment = {}
     total = 0
@@ -72,6 +73,10 @@ def main():
         if dtype in types:
             types[dtype] = types.get(dtype, 0) + 1
         segments[segment] = segments.get(segment, 0) + 1
+
+        ts_key = f"{dtype}|{segment}"
+        if ts_key in type_segment:
+            type_segment[ts_key] += 1
 
         key_t = f"{dtype}|{status}"
         status_by_type[key_t] = status_by_type.get(key_t, 0) + 1
@@ -96,6 +101,12 @@ def main():
         "statuses": statuses,
         "types": types,
         "segments": segments,
+        "type_segment": {
+            "PAYG_ДЗО": type_segment["PAYG|ДЗО"],
+            "PAYG_Внешние": type_segment["PAYG|Внешние"],
+            "Пакеты_ДЗО": type_segment["Пакеты|ДЗО"],
+            "Пакеты_Внешние": type_segment["Пакеты|Внешние"],
+        },
         "cross": cross,
     }
 
