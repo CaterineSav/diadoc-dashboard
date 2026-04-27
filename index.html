@@ -26,6 +26,7 @@
     .card { background: var(--card); border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
     .card .label { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
     .card .value { font-size: 32px; font-weight: 700; }
+    .card .pct { font-size: 15px; font-weight: 500; color: var(--muted); margin-left: 6px; }
     .card .sub { font-size: 13px; color: var(--muted); margin-top: 8px; display: flex; gap: 16px; }
     .card .sub span { display: flex; align-items: center; gap: 4px; }
     .card .sub .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
@@ -47,6 +48,7 @@
     td { padding: 10px 16px; border-bottom: 1px solid var(--border); }
     tr:hover td { background: #f0f4ff; }
     .text-right { text-align: right; }
+    .pct-cell { color: var(--muted); font-size: 12px; }
     @media (max-width: 768px) { .charts { grid-template-columns: 1fr; } .row-2 { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -59,28 +61,42 @@
 
     <!-- Строка 1: Всего -->
     <div class="row row-1" id="row1"></div>
-    <!-- Строка 2: PAYG / Пакеты (с подразбивкой ДЗО/Внешние) -->
+    <!-- Строка 2: PAYG / Пакеты -->
     <div class="row row-2" id="row2"></div>
     <!-- Строка 3: ДЗО / Внешние -->
     <div class="row row-2" id="row3"></div>
     <!-- Строка 4: Статусы -->
     <div class="row row-auto" id="row4"></div>
 
-    <!-- Таблица ВЫШЕ графиков -->
+    <!-- Сводная таблица -->
     <div class="summary-table">
       <h2>Сводная таблица</h2>
       <table>
         <thead>
           <tr>
             <th>Статус</th>
-            <th class="text-right">PAYG</th>
-            <th class="text-right">Пакеты</th>
             <th class="text-right">ДЗО</th>
             <th class="text-right">Внешние</th>
             <th class="text-right">Итого</th>
           </tr>
         </thead>
         <tbody id="summaryBody"></tbody>
+      </table>
+    </div>
+
+    <!-- Подписанные соглашения -->
+    <div class="summary-table" id="signedSection" style="display:none;">
+      <h2>Подписанные соглашения</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>№</th>
+            <th>Формат</th>
+            <th>Сегмент</th>
+            <th>Дата подписания</th>
+          </tr>
+        </thead>
+        <tbody id="signedBody"></tbody>
       </table>
     </div>
 
@@ -100,45 +116,26 @@
   <script>
     const STATUS_COLORS = {
       'Ожидается промежуточная подпись': '#f59e0b',
+      'Ожидается основная подпись': '#f97316',
       'Требуется подписать и отправить': '#3b82f6',
-      'Подписан': '#10b981',
+      'Подписан всеми получателями': '#10b981',
     };
     const FALLBACK = ['#6366f1','#ec4899','#14b8a6','#f97316','#64748b'];
     function getColor(s, i) { return STATUS_COLORS[s] || FALLBACK[i % FALLBACK.length]; }
-
-    function wrapLabel(str, maxWidth) {
-      const words = str.split(' ');
-      const lines = []; let line = '';
-      for (const w of words) {
-        if ((line + ' ' + w).trim().length > maxWidth && line) { lines.push(line.trim()); line = w; }
-        else { line = (line + ' ' + w).trim(); }
-      }
-      if (line) lines.push(line.trim());
-      return lines;
-    }
+    function pct(val, total) { return total ? Math.round(val / total * 100) : 0; }
 
     async function load() {
       const D = await (await fetch('data/dashboard.json')).json();
-
-      // Вычисляем ДЗО/Внешние внутри PAYG и Пакетов из cross-данных
       const ts = D.type_segment || {};
-      // Если type_segment пуст — считаем из cross
-      if (!ts.PAYG_ДЗО && D.cross) {
-        let pD=0, pE=0, kD=0, kE=0;
-        for (const r of D.cross) {
-          pD += r['PAYG']||0; // будет пересчитано ниже
-          kD += r['Пакеты']||0;
-        }
-      }
-      // Берём готовые значения или рассчитываем из segments и types
+      const total = D.total || 1;
       const payg = D.types['PAYG']||0;
       const pkg = D.types['Пакеты']||0;
       const dzo = D.segments['ДЗО']||0;
       const ext = D.segments['Внешние']||0;
-      const paygDzo = ts['PAYG_ДЗО'] ?? Math.round(payg * dzo / (dzo + ext || 1));
-      const paygExt = ts['PAYG_Внешние'] ?? (payg - (ts['PAYG_ДЗО'] ?? Math.round(payg * dzo / (dzo + ext || 1))));
-      const pkgDzo = ts['Пакеты_ДЗО'] ?? Math.round(pkg * dzo / (dzo + ext || 1));
-      const pkgExt = ts['Пакеты_Внешние'] ?? (pkg - (ts['Пакеты_ДЗО'] ?? Math.round(pkg * dzo / (dzo + ext || 1))));
+      const paygDzo = ts['PAYG_ДЗО']||0;
+      const paygExt = ts['PAYG_Внешние']||0;
+      const pkgDzo = ts['Пакеты_ДЗО']||0;
+      const pkgExt = ts['Пакеты_Внешние']||0;
 
       document.getElementById('updated').textContent = 'Обновлено: ' + D.updated;
 
@@ -146,11 +143,11 @@
       document.getElementById('row1').innerHTML =
         `<div class="card total"><div class="label">Всего документов</div><div class="value">${D.total}</div></div>`;
 
-      // Row 2: PAYG / Packages with DZO/External breakdown
+      // Row 2: PAYG / Packages
       document.getElementById('row2').innerHTML =
         `<div class="card payg">
           <div class="label">PAYG</div>
-          <div class="value">${payg}</div>
+          <div class="value">${payg}<span class="pct">${pct(payg,total)}%</span></div>
           <div class="sub">
             <span><span class="dot" style="background:var(--teal)"></span>ДЗО: ${paygDzo}</span>
             <span><span class="dot" style="background:var(--amber)"></span>Внешние: ${paygExt}</span>
@@ -158,7 +155,7 @@
         </div>` +
         `<div class="card packages">
           <div class="label">Пакеты</div>
-          <div class="value">${pkg}</div>
+          <div class="value">${pkg}<span class="pct">${pct(pkg,total)}%</span></div>
           <div class="sub">
             <span><span class="dot" style="background:var(--teal)"></span>ДЗО: ${pkgDzo}</span>
             <span><span class="dot" style="background:var(--amber)"></span>Внешние: ${pkgExt}</span>
@@ -167,25 +164,49 @@
 
       // Row 3: DZO / External
       document.getElementById('row3').innerHTML =
-        `<div class="card dzo"><div class="label">ДЗО</div><div class="value">${D.segments['ДЗО']||0}</div></div>` +
-        `<div class="card ext"><div class="label">Внешние</div><div class="value">${D.segments['Внешние']||0}</div></div>`;
+        `<div class="card dzo"><div class="label">ДЗО</div><div class="value">${dzo}<span class="pct">${pct(dzo,total)}%</span></div></div>` +
+        `<div class="card ext"><div class="label">Внешние</div><div class="value">${ext}<span class="pct">${pct(ext,total)}%</span></div></div>`;
 
-      // Row 4: Statuses
+      // Row 4: Statuses with %
       const r4 = document.getElementById('row4');
       r4.innerHTML = '';
       for (const [st, cnt] of Object.entries(D.statuses)) {
-        r4.innerHTML += `<div class="card"><div class="label">${st}</div><div class="value">${cnt}</div></div>`;
+        r4.innerHTML += `<div class="card"><div class="label">${st}</div><div class="value">${cnt}<span class="pct">${pct(cnt,total)}%</span></div></div>`;
       }
 
-      // Summary table
+      // Summary table: ДЗО / Внешние / Итого
       const body = document.getElementById('summaryBody');
-      let tP=0, tK=0, tD=0, tE=0;
+      let tD=0, tE=0;
       body.innerHTML = D.cross.map(r => {
-        const p=r['PAYG']||0, k=r['Пакеты']||0, d=r['ДЗО']||0, e=r['Внешние']||0;
-        tP+=p; tK+=k; tD+=d; tE+=e;
-        return `<tr><td>${r.status}</td><td class="text-right">${p}</td><td class="text-right">${k}</td><td class="text-right">${d}</td><td class="text-right">${e}</td><td class="text-right"><strong>${p+k}</strong></td></tr>`;
+        const d=r['ДЗО']||0, e=r['Внешние']||0, row_total=d+e;
+        tD+=d; tE+=e;
+        return `<tr>
+          <td>${r.status}</td>
+          <td class="text-right">${d} <span class="pct-cell">(${pct(d,total)}%)</span></td>
+          <td class="text-right">${e} <span class="pct-cell">(${pct(e,total)}%)</span></td>
+          <td class="text-right"><strong>${row_total}</strong> <span class="pct-cell">(${pct(row_total,total)}%)</span></td>
+        </tr>`;
       }).join('');
-      body.innerHTML += `<tr style="font-weight:700;background:var(--bg);"><td>Итого</td><td class="text-right">${tP}</td><td class="text-right">${tK}</td><td class="text-right">${tD}</td><td class="text-right">${tE}</td><td class="text-right">${tP+tK}</td></tr>`;
+      body.innerHTML += `<tr style="font-weight:700;background:var(--bg);">
+        <td>Итого</td>
+        <td class="text-right">${tD} <span class="pct-cell">(${pct(tD,total)}%)</span></td>
+        <td class="text-right">${tE} <span class="pct-cell">(${pct(tE,total)}%)</span></td>
+        <td class="text-right">${tD+tE}</td>
+      </tr>`;
+
+      // Signed agreements table
+      if (D.signed && D.signed.length > 0) {
+        document.getElementById('signedSection').style.display = '';
+        const sb = document.getElementById('signedBody');
+        sb.innerHTML = D.signed.map((r, i) =>
+          `<tr>
+            <td>${i+1}</td>
+            <td>${r.type}</td>
+            <td>${r.segment}</td>
+            <td>${r.date}</td>
+          </tr>`
+        ).join('');
+      }
 
       // Pie chart
       const labels = Object.keys(D.statuses);
@@ -193,10 +214,16 @@
       new Chart(document.getElementById('pieChart'), {
         type: 'doughnut',
         data: { labels, datasets: [{ data: values, backgroundColor: labels.map((s,i)=>getColor(s,i)), borderWidth: 2, borderColor: '#fff' }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 12, font: { size: 12 } } } } }
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'bottom', labels: { boxWidth: 12, padding: 12, font: { size: 12 } } },
+            tooltip: { callbacks: { label: ctx => `${ctx.label}: ${ctx.raw} (${pct(ctx.raw, total)}%)` } }
+          }
+        }
       });
 
-      // Bar chart: DZO/External inside PAYG and Packages
+      // Bar chart
       new Chart(document.getElementById('barChart'), {
         type: 'bar',
         data: {
@@ -210,7 +237,7 @@
           responsive: true, maintainAspectRatio: false,
           plugins: {
             legend: { position: 'bottom', labels: { boxWidth: 12, padding: 12, font: { size: 12 } } },
-            tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.raw}` } }
+            tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.raw} (${pct(ctx.raw, total)}%)` } }
           },
           scales: {
             x: { stacked: true, ticks: { font: { size: 13 } } },

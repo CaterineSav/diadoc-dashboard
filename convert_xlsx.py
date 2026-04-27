@@ -32,7 +32,13 @@ def doc_type(doc_num):
 
 
 def normalize_status(status):
-    return STATUS_MAP.get(status, status)
+    # Сначала проверяем прямое соответствие
+    if status in STATUS_MAP:
+        return STATUS_MAP[status]
+    # "Подписан всеми получателями. На согласовании" → "Подписан всеми получателями"
+    if status.startswith("Подписан всеми получателями"):
+        return "Подписан всеми получателями"
+    return status
 
 
 def load_dzo_inns():
@@ -53,6 +59,7 @@ def main():
     type_segment = {"PAYG|ДЗО": 0, "PAYG|Внешние": 0, "Пакеты|ДЗО": 0, "Пакеты|Внешние": 0}
     status_by_type = {}
     status_by_segment = {}
+    signed = []
     total = 0
 
     for row in range(2, ws.max_row + 1):
@@ -60,6 +67,7 @@ def main():
         org = clean(ws.cell(row=row, column=3).value)
         doc_num = clean(ws.cell(row=row, column=5).value)
         raw_status = clean(ws.cell(row=row, column=14).value)
+        date_changed = clean(ws.cell(row=row, column=16).value)
 
         if not org:
             continue
@@ -83,6 +91,15 @@ def main():
 
         key_s = f"{segment}|{status}"
         status_by_segment[key_s] = status_by_segment.get(key_s, 0) + 1
+
+        if status == "Подписан всеми получателями":
+            # Извлекаем только дату ДД.ММ.ГГГГ из "20.04.2026 18:04:08"
+            sign_date = date_changed.split(" ")[0] if date_changed else ""
+            signed.append({
+                "type": dtype,
+                "segment": segment,
+                "date": sign_date,
+            })
 
     all_statuses = sorted(statuses.keys())
     cross = []
@@ -108,6 +125,7 @@ def main():
             "Пакеты_Внешние": type_segment["Пакеты|Внешние"],
         },
         "cross": cross,
+        "signed": sorted(signed, key=lambda x: x["date"]),
     }
 
     os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
