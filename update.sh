@@ -19,7 +19,7 @@ cp "$SOURCE" "$SCRIPT_DIR/Diadoc_status.xlsx"
 python3 "$SCRIPT_DIR/convert_xlsx.py"
 
 # Коммитим только JSON и пушим
-git add data/dashboard.json .gitignore
+git add data/dashboard.json index.html convert_xlsx.py .gitignore
 git diff --cached --quiet || git commit -m "Update dashboard $(date '+%d.%m.%Y %H:%M')"
 git push || {
   git pull origin main --rebase -X ours 2>/dev/null || {
